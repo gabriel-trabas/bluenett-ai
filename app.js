@@ -232,7 +232,7 @@ app.post('/webhook', async (req, res) => {
 
     try {
       console.log('🧠 Passo 3: chamando IA...');
-      respostaIA = await gerarRespostaIA(numero);
+      respostaIA = 'Bot online funcionando na nuvem 🚀';
       console.log('🧠 IA respondeu:', respostaIA);
     } catch (error) {
       console.error('❌ Erro ao chamar IA:', error.response?.data || error.message);
