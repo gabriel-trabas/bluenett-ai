@@ -1,19 +1,13 @@
 {
   "name": "bluenett-ai",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "main": "src/app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/app.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "axios": "^1.14.0",
+    "axios": "^1.13.1",
     "dotenv": "^17.3.1",
-    "express": "^5.2.1",
-    "openai": "^6.33.0"
+    "express": "^5.1.0"
   }
 }
