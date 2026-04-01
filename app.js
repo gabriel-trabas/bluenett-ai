@@ -5,7 +5,9 @@ const axios = require('axios');
 console.log('Iniciando app...');
 
 const app = express();
-app.use(express.json());
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 const PORT = process.env.PORT || 3000;
 
@@ -13,8 +15,10 @@ const EVOLUTION_URL = process.env.EVOLUTION_URL || 'http://localhost:8080';
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'bluenett';
 
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma3:latest';
+// NOVA CONFIG DA IA VIA API
+const IA_API_URL = process.env.IA_API_URL;
+const IA_API_KEY = process.env.IA_API_KEY;
+const IA_MODEL = process.env.IA_MODEL || 'gpt-4o-mini';
 
 // memoria simples por numero
 const historicoPorNumero = new Map();
@@ -86,6 +90,12 @@ function mensagemValida(payload) {
     return false;
   }
 
+  // processa só evento de mensagem
+  if (event && event !== 'MESSAGES_UPSERT') {
+    console.log('🚫 Evento ignorado:', event);
+    return false;
+  }
+
   return true;
 }
 
@@ -100,9 +110,8 @@ function adicionarNoHistorico(numero, role, content) {
   const historico = obterHistorico(numero);
   historico.push({ role, content });
 
-  // deixa o historico curto para pesar menos
-  if (historico.length > 4) {
-    historico.splice(0, historico.length - 4);
+  if (historico.length > 6) {
+    historico.splice(0, historico.length - 6);
   }
 }
 
@@ -118,33 +127,38 @@ async function gerarRespostaIA(numero) {
     ...historico
   ];
 
-  console.log('🧠 Chamando Ollama...');
-  console.log('🧠 Modelo:', OLLAMA_MODEL);
-  console.log('🧠 URL:', `${OLLAMA_URL}/api/chat`);
+  console.log('🧠 Chamando API de IA...');
+  console.log('🧠 Modelo:', IA_MODEL);
+  console.log('🧠 URL:', IA_API_URL);
+
+  if (!IA_API_URL) {
+    throw new Error('IA_API_URL nao configurada');
+  }
 
   const response = await axios.post(
-    `${OLLAMA_URL}/api/chat`,
+    IA_API_URL,
     {
-      model: OLLAMA_MODEL,
-      messages,
-      stream: false,
-      keep_alive: '10m',
-      options: {
-        num_predict: 80
-      }
+      model: IA_MODEL,
+      messages: messages,
+      temperature: 0.7
     },
     {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${IA_API_KEY}`
       },
-      timeout: 300000
+      timeout: 60000
     }
   );
 
-  console.log('🧠 Resposta bruta do Ollama:');
+  console.log('🧠 Resposta bruta da IA:');
   console.log(JSON.stringify(response.data, null, 2));
 
-  const resposta = response?.data?.message?.content?.trim();
+  // formato comum estilo OpenAI
+  const resposta =
+    response?.data?.choices?.[0]?.message?.content?.trim() ||
+    response?.data?.message?.content?.trim() ||
+    response?.data?.response?.trim();
 
   console.log('🧠 Resposta IA final:', resposta);
 
@@ -190,7 +204,7 @@ app.post('/webhook', async (req, res) => {
     console.log(JSON.stringify(req.body, null, 2));
 
     // responde rapido para a Evolution nao reenviar
-    res.send('OK');
+    res.status(200).send('OK');
 
     const payload = req.body;
 
@@ -232,12 +246,12 @@ app.post('/webhook', async (req, res) => {
 
     try {
       console.log('🧠 Passo 3: chamando IA...');
-      respostaIA = 'Bot online funcionando na nuvem 🚀';
+      respostaIA = await gerarRespostaIA(numero);
       console.log('🧠 IA respondeu:', respostaIA);
     } catch (error) {
       console.error('❌ Erro ao chamar IA:', error.response?.data || error.message);
       respostaIA =
-        'Recebi sua mensagem. Nosso atendimento virtual esta lento no momento, mas seu contato foi registrado.';
+        'Recebi sua mensagem. Nosso atendimento virtual esta temporariamente indisponivel, mas seu contato foi registrado.';
     }
 
     adicionarNoHistorico(numero, 'assistant', respostaIA);
